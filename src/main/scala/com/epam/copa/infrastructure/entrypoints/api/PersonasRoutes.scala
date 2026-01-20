@@ -21,77 +21,74 @@ class PersonasRoutes(
 
   def routes: Route =
     pathPrefix("personas") {
-
-      pathEndOrSingleSlash {
-        get {
-          findAllUseCase.execute().fold(
-
-            {
-              case PersonasEmpty =>
-                complete(
-                  StatusCodes.NotFound ->
-                    ErrorResponse(
-                      error = "PERSONAS_EMPTY",
-                      message = "No existen personas registradas"
-                    )
-                )
-
-              case _ =>
-                complete(
-                  StatusCodes.BadRequest ->
-                    ErrorResponse(
-                      error = "DOMAIN_ERROR",
-                      message = "Error de negocio"
-                    )
-                )
-            },
-
-            personas =>
-              complete(
-                StatusCodes.OK ->
-                  ApiResponse(
-                    message = "Consulta exitosa",
-                    data = personas.map(PersonaDTO.apply)
+      val findAllRoute: Route =
+        pathEndOrSingleSlash {
+          get {
+            findAllUseCase.execute().fold(
+              {
+                case PersonasEmpty =>
+                  complete(
+                    StatusCodes.NotFound ->
+                      ErrorResponse(
+                        error = "PERSONAS_EMPTY",
+                        message = "No existen personas registradas"
+                      )
                   )
-              )
-          )
-        }
-      } ~
-
-      path(Segment) { id =>
-        get {
-          findByIdUseCase.execute(id).fold(
-
-            {
-              case PersonaNotFound(_) =>
-                complete(
-                  StatusCodes.NotFound ->
-                    ErrorResponse(
-                      error = "PERSONA_NOT_FOUND",
-                      message = s"Persona con id $id no encontrada"
-                    )
-                )
-
-              case _ =>
-                complete(
-                  StatusCodes.BadRequest ->
-                    ErrorResponse(
-                      error = "DOMAIN_ERROR",
-                      message = "Error de negocio"
-                    )
-                )
-            },
-
-            persona =>
-              complete(
-                StatusCodes.OK ->
-                  ApiResponse(
-                    message = "Consulta de persona exitosa",
-                    data = PersonaDTO(persona)
+                case _ =>
+                  complete(
+                    StatusCodes.BadRequest ->
+                      ErrorResponse(
+                        error = "DOMAIN_ERROR",
+                        message = "Error de negocio"
+                      )
                   )
-              )
-          )
+              },
+              personas =>
+                complete(
+                  StatusCodes.OK ->
+                    ApiResponse(
+                      message = "Consulta exitosa",
+                      data = personas.map(PersonaDTO.apply)
+                    )
+                )
+            )
+          }
         }
-      }
+
+      val findByIdRoute: Route =
+        path(Segment) { id =>
+          get {
+            findByIdUseCase.execute(id).fold(
+              {
+                case PersonaNotFound(_) =>
+                  complete(
+                    StatusCodes.NotFound ->
+                      ErrorResponse(
+                        error = "PERSONA_NOT_FOUND",
+                        message = s"Persona con id $id no encontrada"
+                      )
+                  )
+                case _ =>
+                  complete(
+                    StatusCodes.BadRequest ->
+                      ErrorResponse(
+                        error = "DOMAIN_ERROR",
+                        message = "Error de negocio"
+                      )
+                  )
+              },
+              persona =>
+                complete(
+                  StatusCodes.OK ->
+                    ApiResponse(
+                      message = "Consulta exitosa",
+                      data = PersonaDTO.apply(persona)
+                    )
+                )
+            )
+          }
+        }
+
+      findAllRoute ~ findByIdRoute
     }
 }
