@@ -13,25 +13,14 @@ class Persona(
 
   def this() = this("", "", "", "", "", "", "")
 
+  // sin id (para crear antes y luego setId)
   def this(tipoDocumento: String,
-            numeroDocumento: String,
-            nombre: String,
-            apellido: String,
-            correo: String,
-            telefono: String
-          ) =
+           numeroDocumento: String,
+           nombre: String,
+           apellido: String,
+           correo: String,
+           telefono: String) =
     this("", tipoDocumento, numeroDocumento, nombre, apellido, correo, telefono)
-
-
-  def this(id: String,
-            tipoDocumento: String,
-            numeroDocumento: String,
-            nombre: String,
-            apellido: String,
-            correo: String,
-            telefono: String) =
-    this(_id = id, _tipoDocumento = tipoDocumento, _numeroDocumento = numeroDocumento,
-      _nombre = nombre, _apellido = apellido, _correo = correo, _telefono = telefono)
 
   def getId: String = _id
   def setId(id: String): Unit = _id = id

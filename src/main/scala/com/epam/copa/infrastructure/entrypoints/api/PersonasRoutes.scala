@@ -4,8 +4,9 @@ package com.epam.copa.infrastructure.entrypoints.api
 import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives._
 import org.apache.pekko.http.scaladsl.server.Route
-import com.epam.copa.com.epam.copa.domain.error.PersonasEmpty
+import com.epam.copa.com.epam.copa.domain.error.{PersonasEmpty, PersonaNotFound}
 import com.epam.copa.com.epam.copa.domain.usecases.FindAllPersonasUseCase
+import com.epam.copa.com.epam.copa.domain.usecases.FindPersonaByIdUseCase
 import com.epam.copa.infrastructure.entrypoints.api.dto.response.{ApiResponse, ErrorResponse}
 import com.epam.copa.infrastructure.entrypoints.api.dto.response.PersonaDTO
 
@@ -13,16 +14,19 @@ import org.mdedetrich.pekko.http.support.CirceHttpSupport._
 import io.circe.generic.auto._
 
 
-
-class PersonasRoutes(findAllUseCase: FindAllPersonasUseCase) {
+class PersonasRoutes(
+                      findAllUseCase: FindAllPersonasUseCase,
+                      findByIdUseCase: FindPersonaByIdUseCase
+                    ) {
 
   def routes: Route =
     pathPrefix("personas") {
+
       pathEndOrSingleSlash {
         get {
           findAllUseCase.execute().fold(
-            {
 
+            {
               case PersonasEmpty =>
                 complete(
                   StatusCodes.NotFound ->
@@ -31,7 +35,6 @@ class PersonasRoutes(findAllUseCase: FindAllPersonasUseCase) {
                       message = "No existen personas registradas"
                     )
                 )
-
 
               case _ =>
                 complete(
@@ -49,6 +52,42 @@ class PersonasRoutes(findAllUseCase: FindAllPersonasUseCase) {
                   ApiResponse(
                     message = "Consulta exitosa",
                     data = personas.map(PersonaDTO.apply)
+                  )
+              )
+          )
+        }
+      } ~
+
+      path(Segment) { id =>
+        get {
+          findByIdUseCase.execute(id).fold(
+
+            {
+              case PersonaNotFound(_) =>
+                complete(
+                  StatusCodes.NotFound ->
+                    ErrorResponse(
+                      error = "PERSONA_NOT_FOUND",
+                      message = s"Persona con id $id no encontrada"
+                    )
+                )
+
+              case _ =>
+                complete(
+                  StatusCodes.BadRequest ->
+                    ErrorResponse(
+                      error = "DOMAIN_ERROR",
+                      message = "Error de negocio"
+                    )
+                )
+            },
+
+            persona =>
+              complete(
+                StatusCodes.OK ->
+                  ApiResponse(
+                    message = "Consulta de persona exitosa",
+                    data = PersonaDTO(persona)
                   )
               )
           )
