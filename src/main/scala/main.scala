@@ -10,8 +10,8 @@ import scala.util.{Failure, Success}
 
 // Infraestructura
 import com.epam.copa.infrastructure.entrypoints.api.PersonasRoutes
-import com.epam.copa.infrastructure.drivenadapters.inmemory.InMemoryPersonaGateway
-import com.epam.copa.domain.usecases.FindAllPersonasUseCase
+import com.epam.copa.infrastructure.driveradapters.PersonaAdapter
+import com.epam.copa.com.epam.copa.domain.usecases.FindAllPersonasUseCase
 
 object Main {
 
@@ -23,18 +23,18 @@ object Main {
     implicit val ec: ExecutionContextExecutor =
       system.executionContext
 
-    // 1️⃣ Gateway (in-memory por ahora)
-    val personaGateway = new InMemoryPersonaGateway
+    //  Gateway (in-memory por ahora)
+    val personaGateway = new PersonaAdapter
 
-    // 2️⃣ Use case
+    // Use case
     val findAllPersonasUseCase =
       new FindAllPersonasUseCase(personaGateway)
 
-    // 3️⃣ Routes
+    // Routes
     val personasRoutes =
       new PersonasRoutes(findAllPersonasUseCase)
 
-    // 4️⃣ Arranque del servidor HTTP
+    // Arranque del servidor HTTP
     val bindingFuture =
       Http().newServerAt("localhost", 8080)
         .bind(personasRoutes.routes)
@@ -42,10 +42,10 @@ object Main {
     bindingFuture.onComplete {
       case Success(binding) =>
         val address = binding.localAddress
-        println(s"🚀 Servidor corriendo en http://${address.getHostString}:${address.getPort}/")
+        println(s" Servidor corriendo en http://${address.getHostString}:${address.getPort}/")
 
       case Failure(ex) =>
-        println(s"❌ Error levantando el servidor: ${ex.getMessage}")
+        println(s" Error levantando el servidor: ${ex.getMessage}")
         system.terminate()
     }
   }
