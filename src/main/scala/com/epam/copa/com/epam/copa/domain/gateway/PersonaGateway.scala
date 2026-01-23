@@ -7,4 +7,6 @@ trait PersonaGateway {
 
   def findAll(): List[PersonaModel]
   def  findById(id: String): Option[PersonaModel]
+  def save(persona: PersonaModel): PersonaModel
+  def existsByDocument(documentNumber: String): Boolean
 }

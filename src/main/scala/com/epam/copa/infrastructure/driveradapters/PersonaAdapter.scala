@@ -12,4 +12,14 @@ class PersonaAdapter extends  PersonaGateway{
 
   override def findById(id: String): Option[PersonaModel] = PersonaInMemory
     .findById(id).map(PersonaMapper.toModel)
+
+  override def save(persona: PersonaModel): PersonaModel = {
+    val  entity = PersonaMapper.toDomain(persona)
+    val savedEntity = PersonaInMemory.save(entity)
+    PersonaMapper.toModel(savedEntity)
+
+  }
+
+  override def existsByDocument(documentNumber: String): Boolean =
+    PersonaInMemory.findAll().exists(_.getNumeroDocumento == documentNumber)
 }

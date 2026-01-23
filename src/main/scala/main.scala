@@ -11,7 +11,7 @@ import scala.util.{Failure, Success}
 // Infraestructura
 import com.epam.copa.infrastructure.entrypoints.api.PersonasRoutes
 import com.epam.copa.infrastructure.driveradapters.PersonaAdapter
-import com.epam.copa.com.epam.copa.domain.usecases.{FindAllPersonasUseCase, FindPersonaByIdUseCase}
+import com.epam.copa.com.epam.copa.domain.usecases._
 
 object Main {
 
@@ -33,11 +33,15 @@ object Main {
     val findPersonaByIdUseCase =
       new FindPersonaByIdUseCase(personaGateway)
 
+    val savePersonaUseCase =
+      new SavePersonaUseCase(personaGateway)
+
     // Routes
     val personasRoutes =
       new PersonasRoutes(
         findAllPersonasUseCase,
-        findPersonaByIdUseCase
+        findPersonaByIdUseCase,
+        savePersonaUseCase
       )
 
     // Arranque del servidor HTTP

@@ -1,26 +1,36 @@
 package com.epam.copa
 package com.epam.copa.infrastructure.entrypoints.api
 
-import org.apache.pekko.http.scaladsl.model.StatusCodes
 import org.apache.pekko.http.scaladsl.server.Directives._
 import org.apache.pekko.http.scaladsl.server.Route
-import com.epam.copa.com.epam.copa.domain.error.{PersonasEmpty, PersonaNotFound}
-import com.epam.copa.com.epam.copa.domain.usecases.FindAllPersonasUseCase
-import com.epam.copa.com.epam.copa.domain.usecases.FindPersonaByIdUseCase
-import com.epam.copa.infrastructure.entrypoints.api.dto.response.{ApiResponse, ErrorResponse}
-import com.epam.copa.infrastructure.entrypoints.api.dto.response.PersonaDTO
+import org.apache.pekko.http.scaladsl.model.{ContentTypes, HttpEntity, StatusCodes}
 
-import org.mdedetrich.pekko.http.support.CirceHttpSupport._
+import io.circe.Json
 import io.circe.generic.auto._
+import io.circe.parser.decode
+import io.circe.syntax._
 
+import com.epam.copa.com.epam.copa.domain.usecases._
+import com.epam.copa.com.epam.copa.domain.error._
+import com.epam.copa.infrastructure.entrypoints.api.dto.request.PersonaRequestDTO
+import com.epam.copa.infrastructure.entrypoints.api.dto.response.PersonaDTO
+import com.epam.copa.infrastructure.entrypoints.api.mapper.PersonaRequestMapper
 
 class PersonasRoutes(
                       findAllUseCase: FindAllPersonasUseCase,
-                      findByIdUseCase: FindPersonaByIdUseCase
+                      findByIdUseCase: FindPersonaByIdUseCase,
+                      savePersonaUseCase: SavePersonaUseCase
                     ) {
+
+  private def respondJson(status: StatusCodes.ClientError, json: Json): Route =
+    complete(status, HttpEntity(ContentTypes.`application/json`, json.noSpaces))
+
+  private def respondJson(status: StatusCodes.Success, json: Json): Route =
+    complete(status, HttpEntity(ContentTypes.`application/json`, json.noSpaces))
 
   def routes: Route =
     pathPrefix("personas") {
+
       val findAllRoute: Route =
         pathEndOrSingleSlash {
           get {
@@ -28,28 +38,38 @@ class PersonasRoutes(
               {
                 case PersonasEmpty =>
                   complete(
-                    StatusCodes.NotFound ->
-                      ErrorResponse(
-                        error = "PERSONAS_EMPTY",
-                        message = "No existen personas registradas"
-                      )
+                    StatusCodes.NotFound,
+                    HttpEntity(
+                      ContentTypes.`application/json`,
+                      Json.obj(
+                        "error" -> Json.fromString("PERSONAS_EMPTY"),
+                        "message" -> Json.fromString("No existen personas registradas")
+                      ).noSpaces
+                    )
                   )
+
                 case _ =>
                   complete(
-                    StatusCodes.BadRequest ->
-                      ErrorResponse(
-                        error = "DOMAIN_ERROR",
-                        message = "Error de negocio"
-                      )
+                    StatusCodes.BadRequest,
+                    HttpEntity(
+                      ContentTypes.`application/json`,
+                      Json.obj(
+                        "error" -> Json.fromString("DOMAIN_ERROR"),
+                        "message" -> Json.fromString("Error de negocio")
+                      ).noSpaces
+                    )
                   )
               },
               personas =>
                 complete(
-                  StatusCodes.OK ->
-                    ApiResponse(
-                      message = "Consulta exitosa",
-                      data = personas.map(PersonaDTO.apply)
-                    )
+                  StatusCodes.OK,
+                  HttpEntity(
+                    ContentTypes.`application/json`,
+                    Json.obj(
+                      "message" -> Json.fromString("Consulta exitosa"),
+                      "data" -> personas.map(PersonaDTO.apply).asJson
+                    ).noSpaces
+                  )
                 )
             )
           }
@@ -62,33 +82,95 @@ class PersonasRoutes(
               {
                 case PersonaNotFound(_) =>
                   complete(
-                    StatusCodes.NotFound ->
-                      ErrorResponse(
-                        error = "PERSONA_NOT_FOUND",
-                        message = s"Persona con id $id no encontrada"
-                      )
+                    StatusCodes.NotFound,
+                    HttpEntity(
+                      ContentTypes.`application/json`,
+                      Json.obj(
+                        "error" -> Json.fromString("PERSONA_NOT_FOUND"),
+                        "message" -> Json.fromString(s"Persona con id $id no encontrada")
+                      ).noSpaces
+                    )
                   )
+
                 case _ =>
                   complete(
-                    StatusCodes.BadRequest ->
-                      ErrorResponse(
-                        error = "DOMAIN_ERROR",
-                        message = "Error de negocio"
-                      )
+                    StatusCodes.BadRequest,
+                    HttpEntity(
+                      ContentTypes.`application/json`,
+                      Json.obj(
+                        "error" -> Json.fromString("DOMAIN_ERROR"),
+                        "message" -> Json.fromString("Error de negocio")
+                      ).noSpaces
+                    )
                   )
               },
               persona =>
                 complete(
-                  StatusCodes.OK ->
-                    ApiResponse(
-                      message = "Consulta exitosa",
-                      data = PersonaDTO.apply(persona)
-                    )
+                  StatusCodes.OK,
+                  HttpEntity(
+                    ContentTypes.`application/json`,
+                    Json.obj(
+                      "message" -> Json.fromString("Consulta exitosa"),
+                      "data" -> PersonaDTO.apply(persona).asJson
+                    ).noSpaces
+                  )
                 )
             )
           }
         }
 
-      findAllRoute ~ findByIdRoute
+      val savePersonaRoute: Route =
+        pathEndOrSingleSlash {
+          post {
+            entity(as[String]) { body =>
+              decode[PersonaRequestDTO](body) match {
+                case Right(requestDto) =>
+                  val personaModel = PersonaRequestMapper.toModel(requestDto)
+
+                  savePersonaUseCase.execute(personaModel).fold(
+                    _ =>
+                      complete(
+                        StatusCodes.BadRequest,
+                        HttpEntity(
+                          ContentTypes.`application/json`,
+                          Json.obj(
+                            "error" -> Json.fromString("DOMAIN_ERROR"),
+                            "message" -> Json.fromString("Error de negocio")
+                          ).noSpaces
+                        )
+                      ),
+                    personaSaved =>
+                      complete(
+                        StatusCodes.Created,
+                        HttpEntity(
+                          ContentTypes.`application/json`,
+                          Json.obj(
+                            "message" -> Json.fromString("Persona creada correctamente"),
+                            "data" -> Json.obj(
+                              "idPersona" -> Json.fromString(personaSaved.getIdPersona)
+                            )
+                          ).noSpaces
+                        )
+                      )
+                  )
+
+                case Left(err) =>
+                  complete(
+                    StatusCodes.BadRequest,
+                    HttpEntity(
+                      ContentTypes.`application/json`,
+                      Json.obj(
+                        "error" -> Json.fromString("INVALID_JSON"),
+                        "message" -> Json.fromString(err.getMessage)
+                      ).noSpaces
+                    )
+                  )
+              }
+            }
+          }
+        }
+
+      findAllRoute ~ findByIdRoute ~ savePersonaRoute
     }
 }
+

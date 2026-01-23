@@ -4,7 +4,7 @@ import com.epam.copa.infrastructure.driveradapters.objects.Persona
 
 object PersonaInMemory {
   
-  private val data: List[Persona] = List(
+  private var data: List[Persona] = List(
     new Persona("1",  "CC",  "1010101010", "Camilo",  "Ruiz",   "camilo@mail.com",  "3000000001"),
     new Persona("2",  "TI",  "2020202020", "Laura",   "Gomez",  "laura@mail.com",   "3000000002"),
     new Persona("3",  "RC",  "3030303030", "Juan",    "Lopez",  "juan@mail.com",    "3000000003"),
@@ -33,6 +33,25 @@ object PersonaInMemory {
 
   def findById(id: String): Option[Persona] =
     data.find(_.getId == id)
-  
+
+  def save(persona: Persona): Persona = {
+
+    val newPersona = new Persona(
+      nextId(),
+      persona.getTipoDocumento,
+      persona.getNumeroDocumento,
+      persona.getNombre,
+      persona.getApellido,
+      persona.getCorreo,
+      persona.getTelefono
+    )
+
+    data = data :+ newPersona
+    newPersona
+  }
+
+
+  private def nextId() : String =
+    data.map(_.getId.toInt).maxOption.getOrElse(0).+(1).toString
 
 }
