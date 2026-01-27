@@ -19,6 +19,7 @@ lazy val root = (project in file("."))
 
       "com.softwaremill.sttp.client" %% "core"  % sttpClientVersion,
       "com.softwaremill.sttp.client" %% "circe" % sttpClientVersion,
+      "com.softwaremill.sttp.model" %% "core" % "1.4.7",
       "com.softwaremill.sttp.client" %% "async-http-client-backend-monix" % sttpClientVersion,
       "io.monix" %% "monix" % "3.1.0"
     )
