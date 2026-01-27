@@ -22,11 +22,110 @@ class PersonasRoutes(
                       savePersonaUseCase: SavePersonaUseCase
                     ) {
 
+  // ---------------------------
+  // Helpers JSON (como lo tenías)
+  // ---------------------------
+
   private def respondJson(status: StatusCodes.ClientError, json: Json): Route =
     complete(status, HttpEntity(ContentTypes.`application/json`, json.noSpaces))
 
   private def respondJson(status: StatusCodes.Success, json: Json): Route =
     complete(status, HttpEntity(ContentTypes.`application/json`, json.noSpaces))
+
+  // ---------------------------
+  // Validación DTO
+  // ---------------------------
+
+  private def blank(s: String): Boolean =
+    s == null || s.trim.isEmpty
+
+  private def missingFields(dto: PersonaRequestDTO): List[String] = {
+    val fields = List(
+      "tipoDocumento"   -> dto.tipoDocumento,
+      "numeroDocumento" -> dto.numeroDocumento,
+      "nombre"          -> dto.nombre,
+      "apellido"        -> dto.apellido,
+      "correo"          -> dto.correo,
+      "telefono"        -> dto.telefono
+    )
+    fields.collect { case (name, value) if blank(value) => name }
+  }
+
+
+  private def validate(dto: PersonaRequestDTO): Either[Route, PersonaRequestDTO] =
+    Either.cond(
+      dto.isValid,
+      dto,
+      {
+        val missing = missingFields(dto)
+        respondJson(
+          StatusCodes.BadRequest,
+          Json.obj(
+            "error" -> Json.fromString("INVALID_REQUEST"),
+            "message" -> Json.fromString("Campos requeridos vacíos o faltantes"),
+            "data" -> Json.obj(
+              "missingFields" -> missing.asJson
+            )
+          )
+        )
+      }
+    )
+
+
+
+  private def domainErrorJson(err: DomainError): (StatusCodes.ClientError, Json) = err match {
+    case PersonasEmpty =>
+      StatusCodes.NotFound ->
+        Json.obj(
+          "error" -> Json.fromString("PERSONAS_EMPTY"),
+          "message" -> Json.fromString("No existen personas registradas")
+        )
+
+    case PersonaNotFound(id) =>
+      StatusCodes.NotFound ->
+        Json.obj(
+          "error" -> Json.fromString("PERSONA_NOT_FOUND"),
+          "message" -> Json.fromString(s"Persona con id $id no encontrada")
+        )
+
+    case PersonDuplicated =>
+      StatusCodes.Conflict ->
+        Json.obj(
+          "error" -> Json.fromString("PERSON_DUPLICATED"),
+          "message" -> Json.fromString("La persona ya existe")
+        )
+
+    case InvalidPerson =>
+      StatusCodes.BadRequest ->
+        Json.obj(
+          "error" -> Json.fromString("INVALID_PERSON"),
+          "message" -> Json.fromString("Datos de persona inválidos")
+        )
+
+
+    case EmailSendFailed(reason) =>
+      StatusCodes.BadRequest ->
+        Json.obj(
+          "error" -> Json.fromString("EMAIL_SEND_FAILED"),
+          "message" -> Json.fromString(reason)
+        )
+
+    case _ =>
+      StatusCodes.BadRequest ->
+        Json.obj(
+          "error" -> Json.fromString("DOMAIN_ERROR"),
+          "message" -> Json.fromString("Error de negocio")
+        )
+  }
+
+  private def respondDomainError(err: DomainError): Route = {
+    val (status, json) = domainErrorJson(err)
+    respondJson(status, json)
+  }
+
+  // ---------------------------
+  // Routes
+  // ---------------------------
 
   def routes: Route =
     pathPrefix("personas") {
@@ -35,40 +134,13 @@ class PersonasRoutes(
         pathEndOrSingleSlash {
           get {
             findAllUseCase.execute().fold(
-              {
-                case PersonasEmpty =>
-                  complete(
-                    StatusCodes.NotFound,
-                    HttpEntity(
-                      ContentTypes.`application/json`,
-                      Json.obj(
-                        "error" -> Json.fromString("PERSONAS_EMPTY"),
-                        "message" -> Json.fromString("No existen personas registradas")
-                      ).noSpaces
-                    )
-                  )
-
-                case _ =>
-                  complete(
-                    StatusCodes.BadRequest,
-                    HttpEntity(
-                      ContentTypes.`application/json`,
-                      Json.obj(
-                        "error" -> Json.fromString("DOMAIN_ERROR"),
-                        "message" -> Json.fromString("Error de negocio")
-                      ).noSpaces
-                    )
-                  )
-              },
+              err => respondDomainError(err),
               personas =>
-                complete(
+                respondJson(
                   StatusCodes.OK,
-                  HttpEntity(
-                    ContentTypes.`application/json`,
-                    Json.obj(
-                      "message" -> Json.fromString("Consulta exitosa"),
-                      "data" -> personas.map(PersonaDTO.apply).asJson
-                    ).noSpaces
+                  Json.obj(
+                    "message" -> Json.fromString("Consulta exitosa"),
+                    "data" -> personas.map(PersonaDTO.apply).asJson
                   )
                 )
             )
@@ -79,40 +151,13 @@ class PersonasRoutes(
         path(Segment) { id =>
           get {
             findByIdUseCase.execute(id).fold(
-              {
-                case PersonaNotFound(_) =>
-                  complete(
-                    StatusCodes.NotFound,
-                    HttpEntity(
-                      ContentTypes.`application/json`,
-                      Json.obj(
-                        "error" -> Json.fromString("PERSONA_NOT_FOUND"),
-                        "message" -> Json.fromString(s"Persona con id $id no encontrada")
-                      ).noSpaces
-                    )
-                  )
-
-                case _ =>
-                  complete(
-                    StatusCodes.BadRequest,
-                    HttpEntity(
-                      ContentTypes.`application/json`,
-                      Json.obj(
-                        "error" -> Json.fromString("DOMAIN_ERROR"),
-                        "message" -> Json.fromString("Error de negocio")
-                      ).noSpaces
-                    )
-                  )
-              },
+              err => respondDomainError(err),
               persona =>
-                complete(
+                respondJson(
                   StatusCodes.OK,
-                  HttpEntity(
-                    ContentTypes.`application/json`,
-                    Json.obj(
-                      "message" -> Json.fromString("Consulta exitosa"),
-                      "data" -> PersonaDTO.apply(persona).asJson
-                    ).noSpaces
+                  Json.obj(
+                    "message" -> Json.fromString("Consulta exitosa"),
+                    "data" -> PersonaDTO.apply(persona).asJson
                   )
                 )
             )
@@ -124,46 +169,36 @@ class PersonasRoutes(
           post {
             entity(as[String]) { body =>
               decode[PersonaRequestDTO](body) match {
-                case Right(requestDto) =>
-                  val personaModel = PersonaRequestMapper.toModel(requestDto)
-
-                  savePersonaUseCase.execute(personaModel).fold(
-                    _ =>
-                      complete(
-                        StatusCodes.BadRequest,
-                        HttpEntity(
-                          ContentTypes.`application/json`,
-                          Json.obj(
-                            "error" -> Json.fromString("DOMAIN_ERROR"),
-                            "message" -> Json.fromString("Error de negocio")
-                          ).noSpaces
-                        )
-                      ),
-                    personaSaved =>
-                      complete(
-                        StatusCodes.Created,
-                        HttpEntity(
-                          ContentTypes.`application/json`,
-                          Json.obj(
-                            "message" -> Json.fromString("Persona creada correctamente"),
-                            "data" -> Json.obj(
-                              "idPersona" -> Json.fromString(personaSaved.getIdPersona)
-                            )
-                          ).noSpaces
-                        )
-                      )
-                  )
 
                 case Left(err) =>
-                  complete(
+                  respondJson(
                     StatusCodes.BadRequest,
-                    HttpEntity(
-                      ContentTypes.`application/json`,
-                      Json.obj(
-                        "error" -> Json.fromString("INVALID_JSON"),
-                        "message" -> Json.fromString(err.getMessage)
-                      ).noSpaces
+                    Json.obj(
+                      "error" -> Json.fromString("INVALID_JSON"),
+                      "message" -> Json.fromString(err.getMessage)
                     )
+                  )
+
+                case Right(requestDto) =>
+                  validate(requestDto).fold(
+                    route => route,
+                    validDto => {
+                      val personaModel = PersonaRequestMapper.toModel(validDto)
+
+                      savePersonaUseCase.execute(personaModel).fold(
+                        err => respondDomainError(err),
+                        personaSaved =>
+                          respondJson(
+                            StatusCodes.Created,
+                            Json.obj(
+                              "message" -> Json.fromString("Persona creada correctamente"),
+                              "data" -> Json.obj(
+                                "idPersona" -> Json.fromString(personaSaved.getIdPersona)
+                              )
+                            )
+                          )
+                      )
+                    }
                   )
               }
             }
@@ -173,4 +208,3 @@ class PersonasRoutes(
       findAllRoute ~ findByIdRoute ~ savePersonaRoute
     }
 }
-

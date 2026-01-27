@@ -5,16 +5,12 @@ import com.epam.copa.com.epam.copa.domain.gateway.EmailGateway
 import com.epam.copa.com.epam.copa.domain.model.PersonaModel
 import com.epam.copa.com.epam.copa.domain.error.{DomainError,EmailSendFailed}
 import com.epam.copa.infrastructure.apatersemail.error._
+import com.epam.copa.infrastructure.apatersemail.mapper.PersonaEmailMapper
 
 import io.circe.generic.auto._
 import sttp.client._
-import sttp.client.circe._
 import sttp.model.StatusCode
-
-import io.circe.generic.auto._
-import sttp.client._
-import sttp.client.circe._
-import sttp.model.StatusCode
+import io.circe.syntax._
 
 class EmailGatewayAdapter(baseUrl: String) extends EmailGateway {
 
@@ -31,7 +27,7 @@ class EmailGatewayAdapter(baseUrl: String) extends EmailGateway {
       val response = basicRequest
         .post(uri"$baseUrl/api/v1/persona")
         .contentType("application/json")
-        .body(persona)
+        .body(PersonaEmailMapper.toJson(persona).noSpaces)
         .response(asStringAlways)
         .send()
 

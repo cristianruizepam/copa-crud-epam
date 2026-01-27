@@ -11,6 +11,7 @@ import scala.util.{Failure, Success}
 // Infraestructura
 import com.epam.copa.infrastructure.entrypoints.api.PersonasRoutes
 import com.epam.copa.infrastructure.driveradapters.PersonaAdapter
+import com.epam.copa.infrastructure.apatersemail.EmailGatewayAdapter
 import com.epam.copa.com.epam.copa.domain.usecases._
 
 object Main {
@@ -25,6 +26,7 @@ object Main {
 
     // Gateway (in-memory)
     val personaGateway = new PersonaAdapter
+    val emailGatewayAdapter = new EmailGatewayAdapter("http://localhost:8081")
 
     // Use cases
     val findAllPersonasUseCase =
@@ -34,7 +36,7 @@ object Main {
       new FindPersonaByIdUseCase(personaGateway)
 
     val savePersonaUseCase =
-      new SavePersonaUseCase(personaGateway)
+      new SavePersonaUseCase(personaGateway, emailGatewayAdapter)
 
     // Routes
     val personasRoutes =
