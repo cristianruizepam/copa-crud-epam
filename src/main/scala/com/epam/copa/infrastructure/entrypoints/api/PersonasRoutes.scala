@@ -10,6 +10,8 @@ import io.circe.generic.auto._
 import io.circe.parser.decode
 import io.circe.syntax._
 
+import monix.execution.Scheduler.Implicits.global
+
 import com.epam.copa.com.epam.copa.domain.usecases._
 import com.epam.copa.com.epam.copa.domain.error._
 import com.epam.copa.infrastructure.entrypoints.api.dto.request.PersonaRequestDTO
@@ -174,7 +176,7 @@ class PersonasRoutes(
                   respondJson(
                     StatusCodes.BadRequest,
                     Json.obj(
-                      "error" -> Json.fromString("INVALID_JSON"),
+                      "error"   -> Json.fromString("INVALID_JSON"),
                       "message" -> Json.fromString(err.getMessage)
                     )
                   )
@@ -185,9 +187,14 @@ class PersonasRoutes(
                     validDto => {
                       val personaModel = PersonaRequestMapper.toModel(validDto)
 
-                      savePersonaUseCase.execute(personaModel).fold(
-                        err => respondDomainError(err),
-                        personaSaved =>
+                      // execute: EitherT[Task, DomainError, PersonaModel]
+                      val resultF = savePersonaUseCase.execute(personaModel).value.runToFuture
+
+                      onSuccess(resultF) {
+                        case Left(err) =>
+                          respondDomainError(err)
+
+                        case Right(personaSaved) =>
                           respondJson(
                             StatusCodes.Created,
                             Json.obj(
@@ -197,7 +204,7 @@ class PersonasRoutes(
                               )
                             )
                           )
-                      )
+                      }
                     }
                   )
               }
